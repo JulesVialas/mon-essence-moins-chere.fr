@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mon Essence Moins Chère
 
-## Getting Started
+Comparez les prix des carburants en temps réel dans toutes les stations-service de France, depuis votre mobile.
 
-First, run the development server:
+Données officielles fournies par le [Ministère de l'Économie](https://www.data.gouv.fr/fr/datasets/prix-des-carburants-en-france-flux-instantane-v2/) via data.gouv.fr.
+
+## Fonctionnalités
+
+- Recherche par adresse avec autocomplétion (API adresse.data.gouv.fr)
+- Géolocalisation GPS
+- Filtrage par type de carburant : SP95, SP98, E10, Gazole, E85, GPL
+- Rayon de recherche configurable (5 à 50 km)
+- Tri par prix ou par distance
+- Résumé min/max avec écart en centimes
+- Itinéraire direct vers la station (Google Maps)
+- Interface mobile-first, sans dépendance externe côté UI
+
+## Stack
+
+- [Next.js 16](https://nextjs.org/) (App Router)
+- [React 19](https://react.dev/)
+- [Tailwind CSS v4](https://tailwindcss.com/)
+- [TypeScript](https://www.typescriptlang.org/)
+
+## Développement local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Aucune variable d'environnement requise — l'API data.gouv.fr est publique.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Déploiement sur Vercel
 
-## Learn More
+### Via l'interface Vercel
 
-To learn more about Next.js, take a look at the following resources:
+1. Pusher le dépôt sur GitHub
+2. Aller sur [vercel.com/new](https://vercel.com/new)
+3. Importer le dépôt — Vercel détecte automatiquement Next.js
+4. Cliquer **Deploy** — aucune configuration requise
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Via la CLI
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm i -g vercel
+vercel
+```
 
-## Deploy on Vercel
+### Variables d'environnement
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Aucune. L'application consomme uniquement des APIs publiques françaises.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture
+
+```
+app/
+├── api/
+│   └── stations/
+│       └── route.ts        # Proxy vers data.economie.gouv.fr
+├── components/
+│   └── FuelSearch.tsx      # Composant principal (recherche + résultats)
+├── layout.tsx              # Layout global, métadonnées, font
+├── page.tsx                # Page d'accueil
+└── globals.css             # Styles globaux Tailwind
+```
+
+### Route API `/api/stations`
+
+Proxy serveur vers l'API ODSQL du gouvernement. Paramètres :
+
+| Paramètre | Type   | Défaut | Description                          |
+|-----------|--------|--------|--------------------------------------|
+| `lat`     | number | —      | Latitude (requis)                    |
+| `lon`     | number | —      | Longitude (requis)                   |
+| `fuel`    | string | SP95   | Type de carburant                    |
+| `radius`  | number | 10     | Rayon en km (1–100)                  |
+
+Les résultats sont mis en cache 5 minutes côté serveur (`revalidate: 300`).
+
+## Licence
+
+MIT
