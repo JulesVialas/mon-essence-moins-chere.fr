@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 type FuelType = "Gazole" | "SP95" | "SP98" | "E10" | "E85" | "GPLc";
 
@@ -17,17 +17,18 @@ type Station = {
   geom: { lon: number; lat: number };
   prix: number;
   maj: string;
+  rupture: boolean;
   pop: string;
   distance?: number;
 };
 
 const FUELS: { key: FuelType; label: string; short: string }[] = [
-  { key: "SP95",   label: "Sans-Plomb 95",    short: "SP95" },
-  { key: "SP98",   label: "Sans-Plomb 98",    short: "SP98" },
-  { key: "E10",    label: "E10",               short: "E10" },
-  { key: "Gazole", label: "Gazole",            short: "Diesel" },
-  { key: "E85",    label: "Superéthanol E85",  short: "E85" },
-  { key: "GPLc",   label: "GPL",               short: "GPL" },
+  { key: "SP95",   label: "Sans-Plomb 95",   short: "SP95" },
+  { key: "SP98",   label: "Sans-Plomb 98",   short: "SP98" },
+  { key: "E10",    label: "E10",              short: "E10" },
+  { key: "Gazole", label: "Gazole",           short: "Diesel" },
+  { key: "E85",    label: "Superéthanol E85", short: "E85" },
+  { key: "GPLc",   label: "GPL",              short: "GPL" },
 ];
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -45,11 +46,15 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  const diffH = Math.round((now.getTime() - d.getTime()) / 3600000);
+  const diffH = (Date.now() - d.getTime()) / 3600000;
   if (diffH < 1) return "à l'instant";
-  if (diffH < 24) return `il y a ${diffH}h`;
+  if (diffH < 24) return `il y a ${Math.round(diffH)}h`;
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+}
+
+function getPriceAgeHours(dateStr: string): number {
+  if (!dateStr) return 0;
+  return (Date.now() - new Date(dateStr).getTime()) / 3600000;
 }
 
 function getPriceColor(price: number, min: number, max: number): string {
@@ -95,21 +100,25 @@ function StationCard({
   rank,
   min,
   max,
-  fuelLabel,
 }: {
   station: Station;
   rank?: number;
   min: number;
   max: number;
-  fuelLabel: string;
 }) {
   const priceColor = getPriceColor(station.prix, min, max);
+  const ageH = getPriceAgeHours(station.maj);
+  const isStale = ageH > 48;
+  const dateColor = ageH > 72 ? "text-red-400" : ageH > 48 ? "text-amber-400" : "text-slate-400";
+  const savings = max - station.prix;
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     `${station.adresse}, ${station.cp} ${station.ville}`
   )}`;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-100 flex items-stretch overflow-hidden">
+    <div className={`bg-white rounded-xl border flex items-stretch overflow-hidden ${
+      station.rupture ? "border-red-100 opacity-60" : "border-slate-100"
+    }`}>
       {/* Rank stripe */}
       {rank !== undefined && (
         <div className={`w-9 flex-shrink-0 flex items-center justify-center text-xs font-bold ${
@@ -129,36 +138,51 @@ function StationCard({
         </p>
         <p className="text-slate-500 text-xs mt-0.5">
           {station.cp} {station.ville}
-          {station.pop === "A" && (
-            <span className="ml-2 text-orange-600 font-medium">Autoroute</span>
-          )}
         </p>
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+          {station.rupture && (
+            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">
+              Rupture
+            </span>
+          )}
+          {station.pop === "A" && (
+            <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">
+              Autoroute
+            </span>
+          )}
           {station.distance !== undefined && (
-            <span>
+            <span className="text-xs text-slate-400">
               {station.distance < 1
                 ? `${Math.round(station.distance * 1000)} m`
                 : `${station.distance.toFixed(1)} km`}
             </span>
           )}
-          {station.maj && <span>{formatDate(station.maj)}</span>}
+          {station.maj && (
+            <span className={`text-xs ${dateColor}`} title={isStale ? "Prix potentiellement obsolète" : undefined}>
+              {formatDate(station.maj)}{isStale ? " ⚠" : ""}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Price + nav */}
+      {/* Price + savings + nav */}
       <div className="flex items-center gap-1 pr-2 flex-shrink-0">
         <div className="text-right mr-1">
           <span className={`text-xl font-bold tabular-nums leading-none ${priceColor}`}>
             {station.prix.toFixed(3)}
           </span>
           <span className="text-slate-400 text-xs block">€/L</span>
+          {savings > 0.005 && (
+            <span className="text-emerald-600 text-xs font-medium block leading-none mt-0.5">
+              −{(savings * 100).toFixed(0)} cts
+            </span>
+          )}
         </div>
         <a
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="p-2 rounded-lg text-slate-400 hover:text-blue-600 active:bg-blue-50 transition-colors"
-          title={`Itinéraire vers ${station.adresse}`}
         >
           <IconNav className="w-4 h-4" />
         </a>
@@ -181,7 +205,34 @@ export default function FuelSearch() {
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState<"prix" | "distance">("prix");
   const [searched, setSearched] = useState(false);
+  const [excludeAutoroute, setExcludeAutoroute] = useState(false);
+  const [hideRupture, setHideRupture] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore preferences from localStorage
+  useEffect(() => {
+    const savedFuel = localStorage.getItem("fuel") as FuelType;
+    if (savedFuel && FUELS.some((f) => f.key === savedFuel)) setFuel(savedFuel);
+    const savedRadius = localStorage.getItem("radius");
+    if (savedRadius) setRadius(savedRadius);
+    const savedExcludeAutoroute = localStorage.getItem("excludeAutoroute");
+    if (savedExcludeAutoroute !== null) setExcludeAutoroute(savedExcludeAutoroute === "true");
+  }, []);
+
+  function handleFuelChange(f: FuelType) {
+    setFuel(f);
+    localStorage.setItem("fuel", f);
+  }
+
+  function handleRadiusChange(r: string) {
+    setRadius(r);
+    localStorage.setItem("radius", r);
+  }
+
+  function handleExcludeAutorouteChange(v: boolean) {
+    setExcludeAutoroute(v);
+    localStorage.setItem("excludeAutoroute", String(v));
+  }
 
   const fetchSuggestions = useCallback(async (query: string) => {
     if (query.length < 3) { setSuggestions([]); return; }
@@ -290,14 +341,23 @@ export default function FuelSearch() {
     }
   }
 
-  const sortedStations = [...stations].sort((a, b) => {
+  const filteredStations = stations.filter((s) => {
+    if (excludeAutoroute && s.pop === "A") return false;
+    if (hideRupture && s.rupture) return false;
+    return true;
+  });
+
+  const sortedStations = [...filteredStations].sort((a, b) => {
     if (sortBy === "distance") return (a.distance ?? 999) - (b.distance ?? 999);
     return a.prix - b.prix;
   });
 
-  const prices = stations.map((s) => s.prix);
+  const prices = filteredStations.map((s) => s.prix);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const maxPrice = prices.length ? Math.max(...prices) : 0;
+  const ruptureCount = stations.filter((s) => s.rupture).length;
+  const autorouteCount = stations.filter((s) => s.pop === "A").length;
+  const hiddenCount = stations.length - filteredStations.length;
   const fuelInfo = FUELS.find((f) => f.key === fuel)!;
 
   return (
@@ -352,7 +412,7 @@ export default function FuelSearch() {
             <button
               key={key}
               type="button"
-              onClick={() => setFuel(key)}
+              onClick={() => handleFuelChange(key)}
               className={`flex-shrink-0 h-9 px-4 rounded-full text-sm font-medium transition-colors ${
                 fuel === key
                   ? "bg-blue-600 text-white"
@@ -368,7 +428,7 @@ export default function FuelSearch() {
         <div className="flex gap-2">
           <select
             value={radius}
-            onChange={(e) => setRadius(e.target.value)}
+            onChange={(e) => handleRadiusChange(e.target.value)}
             className="h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 flex-shrink-0"
           >
             <option value="5">5 km</option>
@@ -385,6 +445,28 @@ export default function FuelSearch() {
           </button>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={excludeAutoroute}
+              onChange={(e) => handleExcludeAutorouteChange(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-600">Sans autoroutes</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideRupture}
+              onChange={(e) => setHideRupture(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-600">Masquer les ruptures</span>
+          </label>
+        </div>
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">
             {error}
@@ -397,12 +479,21 @@ export default function FuelSearch() {
         <div className="space-y-3">
           {/* Stats + sort */}
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              <span className="font-semibold text-slate-900">{stations.length}</span> stations
-              {" · "}<span className="font-medium text-slate-700">{fuelInfo.short}</span>
-              {" · "}{locationLabel}
-            </p>
-            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+            <div>
+              <p className="text-sm text-slate-500">
+                <span className="font-semibold text-slate-900">{filteredStations.length}</span> stations
+                {" · "}<span className="font-medium text-slate-700">{fuelInfo.short}</span>
+                {" · "}{locationLabel}
+              </p>
+              {hiddenCount > 0 && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {hiddenCount} masquée{hiddenCount > 1 ? "s" : ""}
+                  {ruptureCount > 0 && hideRupture && ` (${ruptureCount} rupture${ruptureCount > 1 ? "s" : ""})`}
+                  {autorouteCount > 0 && excludeAutoroute && ` (${autorouteCount} autoroute${autorouteCount > 1 ? "s" : ""})`}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
               <button
                 onClick={() => setSortBy("prix")}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -422,7 +513,7 @@ export default function FuelSearch() {
             </div>
           </div>
 
-          {/* Price range summary */}
+          {/* Price range */}
           {minPrice > 0 && (
             <div className="flex items-center gap-3 px-1 text-xs text-slate-500">
               <span><span className="font-semibold text-emerald-600">{minPrice.toFixed(3)} €</span> min</span>
@@ -441,7 +532,6 @@ export default function FuelSearch() {
                 rank={sortBy === "prix" ? index + 1 : undefined}
                 min={minPrice}
                 max={maxPrice}
-                fuelLabel={fuelInfo.label}
               />
             ))}
           </div>

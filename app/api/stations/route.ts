@@ -38,12 +38,13 @@ export async function GET(request: NextRequest) {
 
   const priceField = `${fuelKey}_prix`;
   const majField = `${fuelKey}_maj`;
+  const ruptureField = `${fuelKey}_rupture_debut`;
 
   const params = new URLSearchParams({
     where: `${priceField} IS NOT NULL AND distance(geom, geom'POINT(${lon} ${lat})', ${radiusNum}km)`,
     limit: "50",
     order_by: `${priceField} ASC`,
-    select: `id,adresse,ville,cp,geom,${priceField},${majField},pop`,
+    select: `id,adresse,ville,cp,geom,${priceField},${majField},${ruptureField},pop`,
     timezone: "Europe/Paris",
   });
 
@@ -64,12 +65,12 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json();
 
-    // Normalize dynamic field names (e.g. gazole_prix → prix, gazole_maj → maj)
     const results = (data.results ?? []).map(
       (s: Record<string, unknown>) => ({
         ...s,
         prix: s[priceField],
         maj: s[majField],
+        rupture: !!s[ruptureField],
       })
     );
 
