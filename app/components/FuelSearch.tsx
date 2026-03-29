@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+const StationMap = dynamic(() => import("./StationMap"), { ssr: false });
 
 type FuelType = "Gazole" | "SP95" | "SP98" | "E10" | "E85" | "GPLc";
 
@@ -176,7 +179,14 @@ function NavigationSheet({
           <div className="w-10 h-1 rounded-full bg-slate-200" />
         </div>
 
-        <div className="px-5 pt-2 pb-8">
+        {/* Map preview */}
+        {station.geom && (
+          <div className="h-44 w-full overflow-hidden">
+            <StationMap lat={station.geom.lat} lon={station.geom.lon} />
+          </div>
+        )}
+
+        <div className="px-5 pt-4 pb-8">
           {/* Station info */}
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">
